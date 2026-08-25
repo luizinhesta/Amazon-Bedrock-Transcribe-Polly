@@ -1,291 +1,398 @@
-﻿# Arquitetura â€” Voz Bidirecional com Amazon Transcribe e Amazon Polly
+﻿# Arquitetura — Chat IA com Voz Bidirecional
 
-## VisÃ£o Geral
+## Visão Geral
 
-Esta versÃ£o expande o chat de texto com Amazon Bedrock adicionando voz bidirecional:
+Este projeto é um chat de inteligência artificial com entrada e saída de voz, rodando inteiramente na AWS. O frontend é HTML/CSS/JavaScript puro, sem estrutura de projeto e sem etapa de compilação. Toda a lógica de IA e processamento de voz roda em uma única função AWS Lambda, que orquestra quatro serviços AWS:
 
-- **Entrada de voz:** o usuÃ¡rio fala no microfone â†’ **Amazon Transcribe** converte em texto
-- **SaÃ­da de voz:** o Bedrock responde em texto â†’ **Amazon Polly** converte em Ã¡udio
+| Serviço | Papel |
+|---|---|
+| **Amazon Bedrock** | Gera as respostas da IA (modelo de linguagem) |
+| **Amazon Transcribe** | Converte o áudio do usuário em texto |
+| **Amazon Polly** | Converte a resposta da IA em áudio MP3 |
+| **Amazon S3** | Armazena temporariamente o áudio para o Transcribe |
 
-O frontend continua sendo HTML/JS/CSS puro sem framework. A Lambda orquestra todos os serviÃ§os.
+O **API Gateway** expõe a Lambda como endpoint HTTPS. O **CloudWatch** coleta os logs.
 
 ---
 
 ## Diagrama de Componentes
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         CLIENTE (Navegador)                        â”‚
-â”‚                                                                    â”‚
-â”‚   HTML + CSS + JavaScript puro (sem framework, sem build step)     â”‚
-â”‚                                                                    â”‚
-â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”‚
-â”‚  â”‚ Campo de texto  â”‚      â”‚  MediaRecorder API (Web nativo)      â”‚ â”‚
-â”‚  â”‚ (entrada)       â”‚      â”‚  getUserMedia() â†’ WebM/Opus blob     â”‚ â”‚
-â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜      â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â”‚
-â”‚           â”‚                              â”‚ FileReader â†’ base64     â”‚
-â”‚           â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                        â”‚
-â”‚                          â”‚ fetch POST â€” JSON + base64             â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                           â”‚
-              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-              â”‚      API Gateway        â”‚
-              â”‚  HTTP API  POST /chat   â”‚
-              â”‚  Payload mÃ¡x: 10 MB     â”‚
-              â”‚  CORS configurado       â”‚
-              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                           â”‚ Lambda Proxy Integration
-              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-              â”‚            AWS Lambda â€” Python 3.12             â”‚
-              â”‚            Timeout: 60s  |  MemÃ³ria: 256 MB     â”‚
-              â”‚                                                  â”‚
-              â”‚  lambda_handler()                                â”‚
-              â”‚    â”œâ”€â”€ OPTIONS â†’ 204 (CORS preflight)           â”‚
-              â”‚    â”œâ”€â”€ { audio_base64 } â†’ _handle_audio()       â”‚
-              â”‚    â””â”€â”€ { message }     â†’ _handle_text()         â”‚
-              â””â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                 â”‚              â”‚                  â”‚
-       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”
-       â”‚Amazon Bedrockâ”‚  â”‚Amazon        â”‚  â”‚Amazon Polly  â”‚
-       â”‚Nova Lite v1  â”‚  â”‚Transcribe    â”‚  â”‚Voz: Camila   â”‚
-       â”‚(LLM response)â”‚  â”‚(pt-BR)       â”‚  â”‚Engine: neuralâ”‚
-       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚job assÃ­ncronoâ”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                        â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
-                                â”‚ lÃª/escreve
-                         â”Œâ”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”
-                         â”‚  Amazon S3  â”‚
-                         â”‚  Bucket tempâ”‚
-                         â”‚  /transcribeâ”‚
-                         â”‚  -temp/     â”‚
-                         â”‚  TTL: 1 dia â”‚
-                         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌──────────────────────────────────────────────────────────────────────┐
+│                        CLIENTE (Navegador)                           │
+│                                                                      │
+│   HTML + CSS + JavaScript puro (sem estrutura de projeto, sem etapa de compilação)  │
+│                                                                      │
+│  ┌─────────────────┐      ┌──────────────────────────────────────┐  │
+│  │ Campo de texto  │      │  MediaRecorder API (Web nativo)      │  │
+│  │ (entrada)       │      │  getUserMedia() → WebM/Opus blob     │  │
+│  └────────┬────────┘      └──────────────┬───────────────────────┘  │
+│           │                              │ FileReader → base64       │
+│           └──────────────┬───────────────┘                          │
+│                          │ fetch POST — JSON + base64               │
+└──────────────────────────┼───────────────────────────────────────────┘
+                           │
+              ┌────────────▼────────────┐
+              │      API Gateway        │
+              │  HTTP API  POST /chat   │
+              │  Payload máx: 10 MB     │
+              │  CORS configurado       │
+              └────────────┬────────────┘
+                           │ Integração Lambda Proxy
+              ┌────────────▼────────────────────────────────────────┐
+              │            AWS Lambda — Python 3.12                  │
+              │            Timeout: 60s  |  Memória: 256 MB          │
+              │                                                      │
+              │  lambda_handler()                                    │
+              │    ├── OPTIONS → 204 (pré-verificação CORS)             │
+              │    ├── { audio_base64 } → _handle_audio()           │
+              │    └── { message }     → _handle_text()             │
+              └──┬─────────────┬──────────────────┬─────────────────┘
+                 │             │                  │
+       ┌─────────▼──────┐  ┌───▼──────────┐  ┌───▼──────────┐
+       │Amazon Bedrock  │  │Amazon        │  │Amazon Polly  │
+       │Nova Lite v1    │  │Transcribe    │  │Voz: Camila   │
+       │(LLM response)  │  │(pt-BR)       │  │Engine: neural│
+       └────────────────┘  │job assíncrono│  └──────────────┘
+                           └──────┬───────┘
+                                  │ lê/escreve
+                           ┌──────▼──────┐
+                           │  Amazon S3  │
+                           │  Bucket     │
+                           │  transcribe │
+                           │  -temp/     │
+                           │  TTL: 1 dia │
+                           └─────────────┘
 ```
 
 ---
 
-## Amazon Transcribe â€” Reconhecimento de Fala (ASR)
+## Serviços AWS — Detalhamento
 
-### O que Ã©
+### Amazon Bedrock — Geração de Respostas
 
-O Amazon Transcribe Ã© o serviÃ§o gerenciado de reconhecimento automÃ¡tico de fala (ASR) da AWS. Ele converte arquivos de Ã¡udio em texto usando modelos de deep learning treinados para mÃºltiplos idiomas, incluindo `pt-BR`.
+O Amazon Bedrock é a plataforma de IA generativa gerenciada da AWS. Oferece acesso a modelos de linguagem de grandes provedores sem necessidade de gerenciar infraestrutura.
 
-### Como Ã© usado neste projeto
+**Modelo utilizado:** Amazon Nova Lite v1 (`amazon.nova-lite-v1:0`)
 
-O Transcribe opera no modo **job assÃ­ncrono**: recebe um arquivo de Ã¡udio via URI do S3, processa internamente e disponibiliza o resultado como um arquivo JSON em uma URL temporÃ¡ria.
+Nova Lite é um modelo multimodal leve da Amazon, otimizado para velocidade e custo, com boa qualidade em conversas em português.
+
+**Como é chamado neste projeto:**
+
+A Lambda usa a **Converse API** do Bedrock, que fornece uma interface padronizada independente do modelo:
+
+```python
+bedrock_runtime.converse(
+    modelId="amazon.nova-lite-v1:0",
+    system=[{ "text": "Você é um assistente..." }],
+    messages=[{ "role": "user", "content": [{ "text": mensagem }] }],
+    inferenceConfig={ "maxTokens": 350, "temperature": 0.7, "topP": 0.9 }
+)
+```
+
+**Parâmetros de inferência:**
+
+| Parâmetro | Valor | Efeito |
+|---|---|---|
+| `maxTokens` | 350 | Limita o tamanho da resposta |
+| `temperature` | 0.7 | Criatividade moderada |
+| `topP` | 0.9 | Diversidade controlada nas respostas |
+
+**System prompt:** A Lambda instrui o modelo a responder sempre em português do Brasil, com clareza e objetividade, preferindo respostas curtas (máximo 8 linhas).
+
+> O modelo precisa ser habilitado explicitamente no Console do Amazon Bedrock antes do uso. Consulte o guia de implementação.
+
+---
+
+### Amazon Transcribe — Reconhecimento de Fala (ASR)
+
+O Amazon Transcribe é o serviço gerenciado de reconhecimento automático de fala da AWS. Converte arquivos de áudio em texto usando modelos de aprendizado profundo treinados para múltiplos idiomas, incluindo `pt-BR`.
+
+**Modo de operação:** job assíncrono
+
+O Transcribe não processa áudio em tempo real neste projeto. Recebe um arquivo via URI do S3, processa internamente e disponibiliza o resultado como JSON em uma URL temporária.
 
 ```
-Lambda â†’ S3.put_object(audio.webm)
-       â†’ Transcribe.start_transcription_job(s3://bucket/audio.webm, pt-BR)
-       â†’ polling GetTranscriptionJob a cada 3s
-       â†’ status COMPLETED â†’ baixa JSON da TranscriptFileUri
-       â†’ extrai results.transcripts[0].transcript
-       â†’ S3.delete_object(audio.webm)
+Lambda → S3.put_object(audio.webm)
+       → Transcribe.start_transcription_job(s3://bucket/audio.webm, pt-BR)
+       → verificação a cada 3s
+       → status COMPLETED → baixa JSON da TranscriptFileUri
+       → extrai results.transcripts[0].transcript
+       → S3.delete_object(audio.webm)
 ```
 
-### ParÃ¢metros do job
+**Parâmetros do job:**
 
-| ParÃ¢metro | Valor utilizado | Motivo |
+| Parâmetro | Valor | Motivo |
 |---|---|---|
 | `LanguageCode` | `pt-BR` | Idioma do projeto |
-| `MediaFormat` | Detectado pelo MIME do Ã¡udio | Suporta webm, ogg, mp4, wav, flac |
-| `ShowSpeakerLabels` | `False` | Chat individual â€” sem diarizaÃ§Ã£o |
-| Timeout de polling | 55 segundos | Deixa 5s de margem no timeout de 60s da Lambda |
-| Intervalo de polling | 3 segundos | EquilÃ­brio entre velocidade e custo de chamadas |
+| `MediaFormat` | Detectado pelo MIME do áudio | Suporta webm, ogg, mp4, wav, flac |
+| `ShowSpeakerLabels` | `False` | Chat individual — sem diarização |
+| Timeout de polling | 55 segundos | Deixa 5s de margem no tempo limite de 60s da Lambda |
+| Intervalo de verificação | 3 segundos | Equilíbrio entre velocidade e custo de chamadas |
 
-### Formatos de Ã¡udio suportados
+**Formatos de áudio suportados:**
 
-| MIME Type | ExtensÃ£o | Formato Transcribe |
+| MIME Type | Extensão | Formato Transcribe |
 |---|---|---|
-| `audio/webm` | `.webm` | `webm` (padrÃ£o do Chrome/Firefox) |
+| `audio/webm` | `.webm` | `webm` (padrão Chrome/Firefox) |
 | `audio/ogg` | `.ogg` | `ogg` |
 | `audio/mp4` | `.mp4` | `mp4` |
 | `audio/wav` / `audio/x-wav` | `.wav` | `wav` |
 | `audio/flac` | `.flac` | `flac` |
 
-### Por que job assÃ­ncrono e nÃ£o Transcribe Streaming?
+**Por que job assíncrono e não Transcribe Streaming?**
 
-O Transcribe Streaming exige uma conexÃ£o WebSocket persistente bidirecional. Essa abordagem Ã© incompatÃ­vel com o modelo de requisiÃ§Ã£o/resposta do API Gateway + Lambda, que fecha a conexÃ£o ao tÃ©rmino da funÃ§Ã£o. O job assÃ­ncrono com polling Ã© a soluÃ§Ã£o padrÃ£o para este padrÃ£o de arquitetura.
-
-### Fluxo de dados e privacidade
-
-O Ã¡udio do usuÃ¡rio percorre este caminho:
-1. Navegador â†’ Lambda (base64 no corpo JSON)
-2. Lambda â†’ S3 `transcribe-temp/uuid.webm` (arquivo temporÃ¡rio)
-3. S3 â†’ Transcribe (URI do arquivo)
-4. Transcribe â†’ URL prÃ©-assinada com JSON de resultado
-5. Lambda deleta o arquivo do S3 imediatamente apÃ³s ler o resultado
-6. Regra de ciclo de vida no bucket: exclui automaticamente apÃ³s 1 dia (fallback)
-
-O Ã¡udio **nunca Ã© armazenado permanentemente**.
+O Transcribe Streaming exige uma conexão WebSocket persistente bidirecional. Essa abordagem é incompatível com o modelo de requisição/resposta do API Gateway + Lambda, que fecha a conexão ao término da função. O job assíncrono com verificação periódica é a solução padrão para este padrão de arquitetura.
 
 ---
 
-## Amazon Polly â€” SÃ­ntese de Fala (TTS)
+### Amazon Polly — Síntese de Fala
 
-### O que Ã©
+O Amazon Polly é o serviço gerenciado de síntese de texto em fala da AWS. Converte texto em áudio MP3 usando vozes neurais treinadas com aprendizado profundo.
 
-O Amazon Polly Ã© o serviÃ§o gerenciado de sÃ­ntese de texto em fala (TTS) da AWS. Ele converte texto em Ã¡udio MP3 usando vozes neurais treinadas com deep learning, produzindo fala com entonaÃ§Ã£o, ritmo e naturalidade prÃ³ximos Ã  fala humana.
+**Modo de operação:** síncrono
 
-### Como Ã© usado neste projeto
-
-O Polly opera no modo **sÃ­ncrono**: recebe o texto e retorna imediatamente um stream de Ã¡udio MP3. NÃ£o hÃ¡ armazenamento intermediÃ¡rio.
+O Polly recebe o texto e retorna imediatamente um stream de áudio MP3. Não há armazenamento intermediário.
 
 ```
-Lambda â†’ Polly.synthesize_speech(text, VoiceId=Camila, Engine=neural, OutputFormat=mp3)
-       â†’ AudioStream (bytes)
-       â†’ base64.b64encode(stream)
-       â†’ retorna audio_base64 + audio_mime no JSON de resposta
+Lambda → Polly.synthesize_speech(text, VoiceId=Camila, Engine=neural, OutputFormat=mp3)
+       → AudioStream (bytes)
+       → base64.b64encode(stream)
+       → retorna audio_base64 + audio_mime no JSON de resposta
 ```
 
-### ParÃ¢metros utilizados
+**Parâmetros utilizados:**
 
-| ParÃ¢metro | Valor | Motivo |
+| Parâmetro | Valor | Motivo |
 |---|---|---|
-| `VoiceId` | `Camila` | Ãšnica voz neural feminina pt-BR disponÃ­vel |
-| `Engine` | `neural` | Qualidade superior â€” entonaÃ§Ã£o natural |
-| `OutputFormat` | `mp3` | CompatÃ­vel com todos os navegadores modernos |
-| `LanguageCode` | `pt-BR` | PortuguÃªs do Brasil |
-| Limite de texto | 2.900 caracteres | Margem de seguranÃ§a abaixo do limite de 3.000 do Polly |
+| `VoiceId` | `Camila` | Única voz neural feminina pt-BR disponível |
+| Motor | `neural` | Qualidade superior — entonação natural |
+| `OutputFormat` | `mp3` | Compatível com todos os navegadores modernos |
+| `LanguageCode` | `pt-BR` | Português do Brasil |
+| Limite de texto | 2.900 caracteres | Margem de segurança abaixo do limite de 3.000 do Polly |
 
-### Voz Camila â€” neural vs standard
+**Vozes pt-BR disponíveis no Polly:**
 
-A AWS oferece duas engines para o Polly:
-
-| Engine | Qualidade | Disponibilidade pt-BR | Custo |
-|---|---|---|---|
-| `neural` | Alta â€” deep learning, entonaÃ§Ã£o natural | Camila (feminino) | Maior |
-| `standard` | BÃ¡sica â€” concatenaÃ§Ã£o de fonemas | Camila, VitÃ³ria, Ricardo | Menor |
-
-A engine `neural` foi escolhida pela qualidade perceptivelmente superior na fala conversacional, que Ã© o contexto de uso do chat.
-
-### Outras vozes pt-BR disponÃ­veis
-
-| Voz | GÃªnero | Engine disponÃ­vel |
+| Voz | Gênero | Motor disponível |
 |---|---|---|
 | `Camila` | Feminino | neural, standard |
-| `VitÃ³ria` | Feminino | standard |
+| `Vitória` | Feminino | standard |
 | `Ricardo` | Masculino | standard |
 
-Para trocar a voz, altere a variÃ¡vel de ambiente `POLLY_VOICE_ID` na Lambda.
+O motor `neural` foi escolhida pela qualidade perceptivelmente superior na fala conversacional. Para trocar a voz, altere a variável de ambiente `POLLY_VOICE_ID` na Lambda.
 
-### Quando o Polly Ã© chamado
-
-O Polly Ã© **opcional** e controlado pelo parÃ¢metro `tts` na requisiÃ§Ã£o:
-- `tts: false` â†’ apenas texto Ã© retornado (padrÃ£o)
-- `tts: true` â†’ texto + Ã¡udio MP3 base64 sÃ£o retornados
-
-O frontend envia `tts: true` somente quando o botÃ£o ðŸ”Š estÃ¡ ativado.
+**O Polly é opcional:** o frontend envia `tts: true` somente quando o botão 🔊 está ativado. Quando `tts: false`, a Lambda não chama o Polly e retorna apenas texto.
 
 ---
 
-## Amazon S3 â€” IntermediÃ¡rio do Transcribe
+### Amazon S3 — Armazenamento Temporário
 
-O Transcribe nÃ£o aceita Ã¡udio enviado diretamente na chamada de API â€” ele precisa de um URI do S3. O bucket serve exclusivamente como Ã¡rea de trÃ¢nsito:
+O Transcribe não aceita áudio enviado diretamente na chamada de API — ele precisa de um URI do S3. O bucket serve exclusivamente como área de trânsito:
 
-| Aspecto | ConfiguraÃ§Ã£o |
+| Aspecto | Configuração |
 |---|---|
-| Acesso pÃºblico | Bloqueado (Block Public Access ativado) |
+| Acesso público | Bloqueado (bloqueio de acesso público ativado) |
 | Prefixo dos arquivos | `transcribe-temp/` |
-| Tempo de vida | Deletado pela Lambda apÃ³s transcriÃ§Ã£o + regra de ciclo de vida de 1 dia como fallback |
-| RegiÃ£o | Mesma da Lambda e do Transcribe (`us-east-1`) |
+| Tempo de vida | Deletado pela Lambda após transcrição + regra de ciclo de vida de 1 dia como fallback |
+| Região | Mesma da Lambda e do Transcribe (`us-east-1`) |
+
+O áudio **nunca é armazenado permanentemente**. O caminho do dado é:
+
+1. Navegador → Lambda (base64 no corpo JSON)
+2. Lambda → S3 `transcribe-temp/uuid.webm`
+3. S3 → Transcribe (URI do arquivo)
+4. Transcribe → URL pré-assinada com JSON do resultado
+5. Lambda deleta o arquivo do S3 imediatamente após ler o resultado
+6. Regra de ciclo de vida no bucket: exclui automaticamente após 1 dia (fallback)
 
 ---
 
-## Fluxo 1 â€” Mensagem de Texto
+### AWS Lambda — Orquestração
 
-```
-UsuÃ¡rio digita â†’ submit form
-        â†“
-fetch POST /chat { message: "...", tts: true/false }
-        â†“
-Lambda _handle_text()
-        â”œâ”€â–º Bedrock.converse() â†’ resposta em texto
-        â””â”€â–º [tts=true] Polly.synthesize_speech() â†’ MP3 base64
-        â†“
-Response 200 { reply, audio_base64?, audio_mime? }
-        â†“
-Frontend: exibe bolha de texto + [player de Ã¡udio se tts ativo]
-```
+A Lambda é o núcleo do backend. Uma única função Python 3.12 recebe todas as requisições e coordena os demais serviços.
 
----
+**Configurações:**
 
-## Fluxo 2 â€” Mensagem de Voz
-
-```
-UsuÃ¡rio clica ðŸŽ¤ â†’ MediaRecorder grava
-        â†“
-UsuÃ¡rio clica â¹ â†’ blob WebM/Opus
-        â†“
-FileReader â†’ base64
-        â†“
-fetch POST /chat { audio_base64, audio_mime, tts }
-        â†“
-Lambda _handle_audio()
-        â”œâ”€â–º S3.put_object(transcribe-temp/uuid.webm)
-        â”œâ”€â–º Transcribe.start_transcription_job(pt-BR)
-        â”œâ”€â–º polling a cada 3s (mÃ¡x 55s) â†’ COMPLETED
-        â”œâ”€â–º urllib.urlopen(TranscriptFileUri) â†’ texto
-        â”œâ”€â–º S3.delete_object()  â† remove imediatamente
-        â”œâ”€â–º Bedrock.converse(texto) â†’ resposta
-        â””â”€â–º [tts=true] Polly.synthesize_speech() â†’ MP3
-        â†“
-Response 200 { reply, transcript, audio_base64?, audio_mime? }
-        â†“
-Frontend: exibe player do usuÃ¡rio + transcriÃ§Ã£o + resposta + [player IA]
-```
-
----
-
-## ServiÃ§os AWS Utilizados
-
-| ServiÃ§o | Papel | RegiÃ£o |
+| Parâmetro | Valor | Motivo |
 |---|---|---|
-| **Amazon Transcribe** â­ | Reconhecimento de fala â€” voz do usuÃ¡rio â†’ texto (pt-BR) | us-east-1 |
-| **Amazon Polly** â­ | SÃ­ntese de fala â€” resposta da IA â†’ Ã¡udio MP3 (voz Camila neural) | us-east-1 |
-| **Amazon S3** | Armazenamento temporÃ¡rio do Ã¡udio para o Transcribe | us-east-1 |
-| **Amazon Bedrock** | Modelo de linguagem â€” Amazon Nova Lite v1 | us-east-1 |
-| **AWS Lambda** | OrquestraÃ§Ã£o de todos os serviÃ§os | us-east-1 |
-| **Amazon API Gateway** | HTTP API â€” endpoint pÃºblico POST /chat | us-east-1 |
-| **Amazon CloudWatch** | Logs de execuÃ§Ã£o da Lambda | us-east-1 |
+| Runtime | Python 3.12 | Suporte nativo ao boto3 |
+| Tempo limite | 60 segundos | Tempo necessário para o job do Transcribe completar |
+| Memória | 256 MB | Suficiente para processar áudio base64 |
+| Acionador | API Gateway (HTTP API) | Exposição via HTTPS |
 
-*(â­ serviÃ§os adicionados nesta versÃ£o)*
+**Lógica de roteamento:**
+
+```
+lambda_handler(event)
+  ├── method == OPTIONS  → retorna 204 (pré-verificação CORS)
+  ├── body.audio_base64  → _handle_audio()
+  └── body.message       → _handle_text()
+```
+
+**Clientes boto3** são instanciados fora do manipulador para reutilização entre invocações ativas (reduz latência).
 
 ---
 
-## SeguranÃ§a
+### Amazon API Gateway — Endpoint HTTPS
 
-| Controle | ImplementaÃ§Ã£o |
+O API Gateway expõe a Lambda como endpoint HTTP público.
+
+**Configuração utilizada:** HTTP API (mais simples e barata que REST API)
+
+| Aspecto | Configuração |
 |---|---|
-| Acesso ao bucket S3 | Bloqueio de acesso pÃºblico ativado |
-| RetenÃ§Ã£o de dados de Ã¡udio | Deletado imediatamente apÃ³s transcriÃ§Ã£o + ciclo de vida de 1 dia como fallback |
-| PermissÃµes IAM | PrivilÃ©gio mÃ­nimo â€” apenas as aÃ§Ãµes necessÃ¡rias, S3 restrito ao bucket especÃ­fico |
-| CORS | Apenas o domÃ­nio configurado em `ALLOWED_ORIGIN` Ã© aceito |
-| Transporte | HTTPS obrigatÃ³rio (API Gateway + MediaRecorder API exige contexto seguro) |
+| Tipo | HTTP API |
+| Rota | `POST /chat` |
+| Integração | Proxy da Lambda |
+| Tamanho máximo de payload | 10 MB (necessário para áudio base64) |
+| CORS | Configurado pela variável `ALLOWED_ORIGIN` na Lambda |
 
 ---
 
-## VariÃ¡veis de Ambiente da Lambda
+## Fluxo 1 — Mensagem de Texto
 
-| VariÃ¡vel | DescriÃ§Ã£o | ObrigatÃ³ria |
+```
+Usuário digita → submit form
+        ↓
+fetch POST /chat { message: "...", tts: true/false }
+        ↓
+Lambda _handle_text()
+        ├─► Bedrock.converse() → resposta em texto
+        └─► [síntese de voz ativa] Polly.synthesize_speech() → MP3 base64
+        ↓
+Response 200 { reply, audio_base64?, audio_mime? }
+        ↓
+Frontend: exibe bolha de texto + [reprodutor de áudio se síntese ativa]
+```
+
+---
+
+## Fluxo 2 — Mensagem de Voz
+
+```
+Usuário clica 🎤 → MediaRecorder grava
+        ↓
+Usuário clica ⏹ → blob WebM/Opus
+        ↓
+FileReader → base64
+        ↓
+fetch POST /chat { audio_base64, audio_mime, tts }
+        ↓
+Lambda _handle_audio()
+        ├─► S3.put_object(transcribe-temp/uuid.webm)
+        ├─► Transcribe.start_transcription_job(pt-BR)
+        ├─► verificação a cada 3s (máx 55s) → COMPLETED
+        ├─► urllib.urlopen(TranscriptFileUri) → texto
+        ├─► S3.delete_object()  ← remove imediatamente
+        ├─► Bedrock.converse(texto) → resposta
+        └─► [síntese de voz ativa] Polly.synthesize_speech() → MP3
+        ↓
+Response 200 { reply, transcript, audio_base64?, audio_mime? }
+        ↓
+Frontend: exibe reprodutor do usuário + transcrição + resposta + [reprodutor IA]
+```
+
+---
+
+## Frontend — Interface do Chat
+
+O frontend é composto por três arquivos:
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `index.html` | Estrutura da interface: cabeçalho, lista de mensagens, formulário de envio |
+| `style.css` | Estilos visuais do chat |
+| `script.js` | Toda a lógica: envio de texto, gravação de voz, comunicação com a API, renderização de mensagens |
+
+**Recursos do frontend:**
+
+- **Campo de texto** com auto-resize e envio por Enter
+- **Botão 🎤** para gravação de voz (MediaRecorder API), com timer e parada automática em 60s
+- **Botão 🔊** para ativar/desativar a síntese de voz da IA
+- **Player de áudio inline** nas bolhas de mensagem (gravação do usuário e resposta da IA)
+- **Transcrição em itálico** exibida abaixo do player do usuário após a transcrição
+- **Indicador de status** da API no cabeçalho
+
+**Formato de comunicação:** JSON via `fetch` (POST). O áudio é enviado como string base64 dentro do JSON — sem multipart, sem dependências externas.
+
+---
+
+## Segurança
+
+| Controle | Implementação |
+|---|---|
+| Acesso ao bucket S3 | Bloqueio de acesso público ativado |
+| Retenção de dados de áudio | Deletado imediatamente após transcrição + ciclo de vida de 1 dia como fallback |
+| Permissões IAM | Privilégio mínimo — apenas as ações necessárias, S3 restrito ao bucket específico |
+| CORS | Apenas o domínio configurado em `ALLOWED_ORIGIN` é aceito |
+| Transporte | HTTPS obrigatório (API Gateway + MediaRecorder API exige contexto seguro) |
+
+---
+
+## Variáveis de Ambiente da Lambda
+
+| Variável | Descrição | Obrigatória |
 |---|---|---|
-| `TRANSCRIBE_BUCKET` | Nome do bucket S3 para Ã¡udios temporÃ¡rios | Sim (para voz) |
-| `POLLY_VOICE_ID` | ID da voz do Polly (padrÃ£o: `Camila`) | NÃ£o |
-| `POLLY_ENGINE` | Engine do Polly: `neural` ou `standard` (padrÃ£o: `neural`) | NÃ£o |
 | `BEDROCK_MODEL_ID` | ID do modelo Bedrock (ex: `amazon.nova-lite-v1:0`) | Sim |
-| `ALLOWED_ORIGIN` | DomÃ­nio do frontend para CORS | Sim |
+| `ALLOWED_ORIGIN` | Domínio do frontend para CORS (ex: `https://meusite.com`) | Sim |
+| `TRANSCRIBE_BUCKET` | Nome do bucket S3 para áudios temporários | Sim |
+| `POLLY_VOICE_ID` | ID da voz do Polly (padrão: `Camila`) | Não |
+| `POLLY_ENGINE` | Motor do Polly: `neural` ou `standard` (padrão: `neural`) | Não |
+| `AWS_REGION` | Região AWS (padrão: `us-east-1`) | Não |
 
 ---
 
-## DecisÃµes de Design
+## Permissões IAM necessárias na role da Lambda
 
-**Por que job assÃ­ncrono no Transcribe e nÃ£o streaming?**
-O Transcribe Streaming exige WebSocket persistente â€” incompatÃ­vel com o modelo request/response do API Gateway + Lambda. O job assÃ­ncrono com polling Ã© a abordagem padrÃ£o e mais simples para este padrÃ£o de arquitetura.
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["transcribe:StartTranscriptionJob", "transcribe:GetTranscriptionJob", "transcribe:DeleteTranscriptionJob"],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["polly:SynthesizeSpeech"],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::NOME-DO-SEU-BUCKET/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:*:*:*"
+    }
+  ]
+}
+```
 
-**Por que base64 no payload e nÃ£o multipart/form-data?**
-O frontend Ã© HTML/JS puro sem build step. JSON com base64 Ã© mais simples de implementar e depurar. A penalidade de tamanho (~33%) Ã© aceitÃ¡vel para Ã¡udios de atÃ© 60 segundos.
+---
 
-**Por que Polly no backend e nÃ£o Web Speech API no navegador?**
-A Web Speech API tem suporte inconsistente entre navegadores e nÃ£o oferece controle de voz. Polly com voz Camila neural garante qualidade e consistÃªncia em qualquer dispositivo.
+## Decisões de Design
 
-**Por que deletar o Ã¡udio do S3 imediatamente apÃ³s a transcriÃ§Ã£o?**
-Minimizar o tempo de exposiÃ§Ã£o dos dados de voz do usuÃ¡rio. O Ã¡udio nÃ£o tem valor apÃ³s a transcriÃ§Ã£o â€” mantÃª-lo seria desnecessÃ¡rio e um risco de privacidade.
+**Por que job assíncrono no Transcribe e não streaming?**
+O Transcribe Streaming exige WebSocket persistente — incompatível com o modelo requisição/resposta do API Gateway + Lambda. O job assíncrono com verificação periódica é a abordagem padrão e mais simples para este padrão de arquitetura.
+
+**Por que base64 no payload e não multipart/form-data?**
+O frontend é HTML/JS puro sem etapa de compilação. JSON com base64 é mais simples de implementar e depurar. A penalidade de tamanho (~33%) é aceitável para áudios de até 60 segundos.
+
+**Por que Polly no backend e não Web Speech API no navegador?**
+A Web Speech API tem suporte inconsistente entre navegadores e não oferece controle de voz. O Polly com a voz Camila neural garante qualidade e consistência em qualquer dispositivo.
+
+**Por que uma única Lambda para todos os serviços?**
+Simplicidade operacional. Um único ponto de entrada, um único deploy, um único conjunto de logs. A orquestração sequencial dos serviços dentro da função é suficiente para o volume de uso de um chat.
+
+**Por que deletar o áudio do S3 imediatamente após a transcrição?**
+Minimizar o tempo de exposição dos dados de voz do usuário. O áudio não tem valor após a transcrição — mantê-lo seria desnecessário e um risco de privacidade.
