@@ -1,0 +1,107 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chat IA com Amazon Bedrock</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="chat-panel" aria-label="Bate-papo com IA">
+
+        <header class="chat-header">
+          <div class="chat-brand">
+            <img src="./imagens/logo.png" alt="Logo do agente" class="brand-logo" />
+            <div>
+              <p class="eyebrow">Amazon Bedrock</p>
+              <h1>Chat IA</h1>
+            </div>
+          </div>
+          <div class="header-right">
+            <button
+              class="tts-toggle"
+              id="ttsToggle"
+              type="button"
+              title="Ativar/desativar resposta em áudio"
+              aria-label="Resposta em áudio ativada"
+              aria-pressed="true"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                   stroke-linejoin="round" aria-hidden="true">
+                <!-- ícone speaker-on -->
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+            </button>
+            <span class="status" id="connectionStatus">API pendente</span>
+          </div>
+        </header>
+
+        <div class="messages" id="messages" aria-live="polite">
+          <article class="message assistant">
+            <div class="message-avatar">
+              <img src="./imagens/logo.png" alt="Agente IA" class="avatar-logo" />
+            </div>
+            <div class="message-bubble">
+              <p>Olá. Sou o assistente virtual. Você pode digitar uma mensagem <strong>ou usar o microfone</strong> para falar comigo — responderei também em áudio se a opção estiver ativada.</p>
+            </div>
+          </article>
+        </div>
+
+        <form class="composer" id="chatForm" novalidate>
+
+          <!-- Barra de status de gravação (oculta por padrão) -->
+          <div class="recording-bar" id="recordingBar" hidden aria-live="assertive">
+            <span class="rec-dot" aria-hidden="true"></span>
+            <span id="recordingLabel">Gravando…</span>
+            <span class="rec-timer" id="recTimer">0:00</span>
+          </div>
+
+          <div class="composer-row">
+            <label class="sr-only" for="messageInput">Digite sua mensagem</label>
+            <textarea
+              id="messageInput"
+              name="message"
+              rows="1"
+              placeholder="Digite sua mensagem ou use o microfone…"
+              autocomplete="off"
+            ></textarea>
+
+            <!-- Botão microfone -->
+            <button
+              type="button"
+              class="mic-btn"
+              id="micBtn"
+              title="Gravar mensagem de voz"
+              aria-label="Gravar mensagem de voz"
+              aria-pressed="false"
+            >
+              <!-- ícone microfone -->
+              <svg class="icon-mic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8"  y1="23" x2="16" y2="23"/>
+              </svg>
+              <!-- ícone parar (quadrado) -->
+              <svg class="icon-stop" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                   fill="currentColor" aria-hidden="true" hidden>
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+              </svg>
+            </button>
+
+            <button type="submit" id="sendButton">Enviar</button>
+          </div>
+
+        </form>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
