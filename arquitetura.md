@@ -9,7 +9,7 @@ Este projeto é um chat de inteligência artificial com entrada e saída de voz,
 | **Amazon Bedrock** | Gera as respostas da IA (modelo de linguagem) |
 | **Amazon Transcribe** | Converte o áudio do usuário em texto |
 | **Amazon Polly** | Converte a resposta da IA em áudio MP3 |
-| **Amazon S3** | Armazena temporariamente o áudio para o Transcribe |
+| **Amazon S3** | Um único bucket: hospeda os arquivos do site e armazena temporariamente os áudios na pasta `transcribe-temp/` |
 
 O **API Gateway** expõe a Lambda como endpoint HTTPS. O **CloudWatch** coleta os logs.
 
@@ -54,15 +54,18 @@ O **API Gateway** expõe a Lambda como endpoint HTTPS. O **CloudWatch** coleta o
        │Nova Lite v1    │  │Transcribe    │  │Voz: Camila   │
        │(LLM response)  │  │(pt-BR)       │  │Engine: neural│
        └────────────────┘  │job assíncrono│  └──────────────┘
-                           └──────┬───────┘
-                                  │ lê/escreve
-                           ┌──────▼──────┐
-                           │  Amazon S3  │
-                           │  Bucket     │
-                           │  transcribe │
-                           │  -temp/     │
-                           │  TTL: 1 dia │
-                           └─────────────┘
+                           ┌──────┬───────┘
+                                  │ lê/escreve pasta transcribe-temp/
+                           ┌──────▼──────────────────┐
+                           │       Amazon S3          │
+                           │  Bucket único:           │
+                           │  ├── index.html          │
+                           │  ├── script.js           │
+                           │  ├── style.css           │
+                           │  ├── imagens/            │
+                           │  └── transcribe-temp/    │
+                           │      (áudios temporários)│
+                           └──────────────────────────┘
 ```
 
 ---
@@ -186,18 +189,25 @@ O motor `neural` foi escolhida pela qualidade perceptivelmente superior na fala 
 
 ---
 
-### Amazon S3 — Armazenamento Temporário
+### Amazon S3 — Bucket Único para Site e Áudios
 
-O Transcribe não aceita áudio enviado diretamente na chamada de API — ele precisa de um URI do S3. O bucket serve exclusivamente como área de trânsito:
+O projeto utiliza **um único bucket S3** com dois propósitos distintos, separados por prefixo de pasta:
+
+| Pasta | Conteúdo | Acesso |
+|---|---|---|
+| Raiz (`/`) | Arquivos do site: `index.html`, `script.js`, `style.css`, `imagens/` | Via CloudFront (OAC) |
+| `transcribe-temp/` | Áudios temporários enviados ao Transcribe | Apenas pela Lambda (IAM) |
+
+O Transcribe não aceita áudio enviado diretamente na chamada de API — ele precisa de um URI do S3. A Lambda salva o arquivo em `transcribe-temp/uuid.webm`, inicia o job, e deleta o arquivo imediatamente após receber a transcrição.
 
 | Aspecto | Configuração |
 |---|---|
-| Acesso público | Bloqueado (bloqueio de acesso público ativado) |
-| Prefixo dos arquivos | `transcribe-temp/` |
-| Tempo de vida | Deletado pela Lambda após transcrição + regra de ciclo de vida de 1 dia como fallback |
+| Acesso público | Bloqueado — o CloudFront acessa via política OAC, a Lambda via IAM |
+| Prefixo dos áudios | `transcribe-temp/` |
+| Tempo de vida dos áudios | Deletado pela Lambda após transcrição + regra de ciclo de vida de 1 dia como fallback |
 | Região | Mesma da Lambda e do Transcribe (`us-east-1`) |
 
-O áudio **nunca é armazenado permanentemente**. O caminho do dado é:
+O caminho completo de um áudio temporário é:
 
 1. Navegador → Lambda (base64 no corpo JSON)
 2. Lambda → S3 `transcribe-temp/uuid.webm`
@@ -336,7 +346,7 @@ O frontend é composto por três arquivos:
 |---|---|---|
 | `BEDROCK_MODEL_ID` | ID do modelo Bedrock (ex: `amazon.nova-lite-v1:0`) | Sim |
 | `ALLOWED_ORIGIN` | Domínio do frontend para CORS (ex: `https://meusite.com`) | Sim |
-| `TRANSCRIBE_BUCKET` | Nome do bucket S3 para áudios temporários | Sim |
+| `TRANSCRIBE_BUCKET` | Nome do bucket S3 (o mesmo que hospeda o site — a Lambda grava na pasta `transcribe-temp/` desse bucket) | Sim |
 | `POLLY_VOICE_ID` | ID da voz do Polly (padrão: `Camila`) | Não |
 | `POLLY_ENGINE` | Motor do Polly: `neural` ou `standard` (padrão: `neural`) | Não |
 | `AWS_REGION` | Região AWS (padrão: `us-east-1`) | Não |
@@ -367,6 +377,11 @@ O frontend é composto por três arquivos:
     {
       "Effect": "Allow",
       "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::NOME-DO-SEU-BUCKET/transcribe-temp/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
       "Resource": "arn:aws:s3:::NOME-DO-SEU-BUCKET/*"
     },
     {
@@ -393,6 +408,9 @@ A Web Speech API tem suporte inconsistente entre navegadores e não oferece cont
 
 **Por que uma única Lambda para todos os serviços?**
 Simplicidade operacional. Um único ponto de entrada, um único deploy, um único conjunto de logs. A orquestração sequencial dos serviços dentro da função é suficiente para o volume de uso de um chat.
+
+**Por que um único bucket para site e áudios temporários?**
+Simplicidade operacional. Manter um bucket reduz custos de gerenciamento, configuração de políticas IAM e número de recursos a monitorar. A separação por prefixo (`transcribe-temp/`) é suficiente para isolar os áudios temporários dos arquivos do site. A regra de ciclo de vida garante limpeza automática dos áudios mesmo em caso de falha da Lambda.
 
 **Por que deletar o áudio do S3 imediatamente após a transcrição?**
 Minimizar o tempo de exposição dos dados de voz do usuário. O áudio não tem valor após a transcrição — mantê-lo seria desnecessário e um risco de privacidade.

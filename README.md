@@ -11,7 +11,7 @@ Chat de inteligência artificial com voz bidirecional rodando inteiramente na AW
 | Usuário digita uma mensagem e a IA responde | **Amazon Bedrock** | Texto → texto |
 | Usuário fala pelo microfone — texto é extraído automaticamente | **Amazon Transcribe** | Voz → texto |
 | A IA responde em áudio com voz natural em português | **Amazon Polly** | Texto → voz |
-| Armazenamento temporário do áudio até o Transcribe | **Amazon S3** | Intermediário |
+| Hospedagem dos arquivos do site e armazenamento temporário de áudio | **Amazon S3** | Intermediário |
 
 ---
 
@@ -22,7 +22,7 @@ Chat de inteligência artificial com voz bidirecional rodando inteiramente na AW
 | **Amazon Bedrock** — Nova Lite v1 | Modelo de linguagem — gera as respostas da IA |
 | **Amazon Transcribe** | Reconhecimento de fala — voz do usuário → texto (pt-BR) |
 | **Amazon Polly** | Síntese de fala — resposta da IA → áudio MP3 (voz Camila neural) |
-| **Amazon S3** | Armazenamento temporário do áudio para o Transcribe |
+| **Amazon S3** | Um único bucket: hospeda os arquivos do site (`index.html`, `script.js`, `style.css`, `imagens/`) e armazena temporariamente os áudios do Transcribe na pasta `transcribe-temp/` |
 | **AWS Lambda** — Python 3.12 | Orquestração de todos os serviços AWS |
 | **Amazon API Gateway** | Expõe a Lambda como endpoint HTTPS (POST /chat) |
 | **Amazon CloudWatch** | Logs de execução da Lambda |
@@ -77,7 +77,7 @@ O Amazon Transcribe é o serviço de reconhecimento automático de fala (ASR) da
 **Como funciona neste projeto:**
 - O navegador captura o áudio via **MediaRecorder API** (formato WebM/Opus)
 - O áudio é convertido para base64 e enviado à Lambda
-- A Lambda salva o arquivo temporariamente no S3
+- A Lambda salva o arquivo temporariamente no S3, na pasta `transcribe-temp/` do bucket do site
 - Um job de transcrição é iniciado no Transcribe com idioma `pt-BR`
 - A Lambda aguarda o job concluir (verificação a cada 3 segundos, máximo 55 segundos)
 - O texto transcrito é enviado ao Bedrock como pergunta do usuário
@@ -91,7 +91,7 @@ O Amazon Transcribe é o serviço de reconhecimento automático de fala (ASR) da
 | Formato de entrada | WebM, OGG, MP4, WAV, FLAC |
 | Modo | Job assíncrono |
 | Timeout máximo | 55 segundos |
-| Armazenamento temporário | Amazon S3 — prefixo `transcribe-temp/` |
+| Armazenamento temporário | Amazon S3 — pasta `transcribe-temp/` dentro do bucket do site |
 
 ---
 
@@ -169,7 +169,7 @@ Amazon-Bedrock-Transcribe-Polly/
 |---|---|---|---|
 | `BEDROCK_MODEL_ID` | **Sim** | `amazon.nova-lite-v1:0` | ID do modelo Bedrock |
 | `ALLOWED_ORIGIN` | **Sim** | — | Domínio do frontend para CORS (ex: `https://meusite.com`) |
-| `TRANSCRIBE_BUCKET` | **Sim** | — | Nome do bucket S3 para áudios temporários |
+| `TRANSCRIBE_BUCKET` | **Sim** | — | Nome do bucket S3 (o mesmo que hospeda o site) |
 | `POLLY_VOICE_ID` | Não | `Camila` | Voz do Amazon Polly |
 | `POLLY_ENGINE` | Não | `neural` | Motor do Polly: `neural` ou `standard` |
 | `AWS_REGION` | Não | `us-east-1` | Região dos serviços |

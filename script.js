@@ -3,7 +3,7 @@
 // =============================================================================
 
 // URL pública do API Gateway (rota POST /chat)
-const API_URL = "https://cax0vprdtj.execute-api.us-east-1.amazonaws.com/chat";
+const API_URL = "https://jhmbcrf0o7.execute-api.us-east-1.amazonaws.com/chat";
 
 // Tempo máximo de gravação em milissegundos (60 s)
 const MAX_RECORD_MS = 60_000;
@@ -257,6 +257,8 @@ async function sendAudioMessage(base64, mimeType, userArticle) {
     showApiError(err);
   } finally {
     setProcessing(false);
+    // Garante que a UI de gravação sempre volta ao estado normal
+    setRecordingUI(false);
   }
 }
 
@@ -268,7 +270,18 @@ async function callApi(payload) {
   });
 
   if (!response.ok) {
-    throw new Error(`Erro HTTP ${response.status}`);
+    // Tenta extrair a mensagem de erro do corpo da resposta
+    let detail = "";
+    try {
+      const errBody = await response.json();
+      detail = errBody.error || errBody.detail || "";
+    } catch {
+      // corpo não é JSON — ignora
+    }
+    const msg = detail
+      ? `Erro HTTP ${response.status}: ${detail}`
+      : `Erro HTTP ${response.status}`;
+    throw new Error(msg);
   }
 
   return response.json();

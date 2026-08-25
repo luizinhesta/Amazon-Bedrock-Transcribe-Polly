@@ -8,50 +8,54 @@
 
 | # | Etapa | Console AWS | Tempo estimado |
 |---|---|---|---|
-| 1 | Habilitar modelo no Amazon Bedrock | Amazon Bedrock | 5 min |
+| 1 | Verificar acesso ao modelo no Amazon Bedrock | Amazon Bedrock | 5 min |
 | 2 | Criar a função Lambda | AWS Lambda | 10 min |
 | 3 | Criar o API Gateway e conectar à Lambda | API Gateway | 10 min |
-| 4 | Criar o bucket S3 para áudios temporários | Amazon S3 | 5 min |
+| 4 | Criar o bucket S3 e fazer upload do frontend | Amazon S3 | 10 min |
 | 5 | Criar e anexar a política IAM à Lambda | IAM | 5 min |
 | 6 | Configurar variáveis de ambiente na Lambda | AWS Lambda | 3 min |
 | 7 | Ajustar tempo limite e memória da Lambda | AWS Lambda | 2 min |
 | 8 | Fazer upload do código da Lambda | AWS Lambda | 5 min |
-| 9 | Configurar o frontend (script.js) | Editor de texto | 2 min |
-| 10 | Testes de validação | Navegador + CloudWatch | 15 min |
+| 9 | Criar o certificado SSL/TLS no ACM | Certificate Manager | 5 min |
+| 10 | Criar a distribuição CloudFront | CloudFront | 15 min |
+| 11 | Criar o registro DNS no Route 53 | Route 53 | 5 min |
+| 12 | Configurar o frontend e finalizar | Editor de texto | 5 min |
+| 13 | Testes de validação | Navegador + CloudWatch | 15 min |
 
-**Tempo total estimado: ~60 minutos**
+**Tempo total estimado: ~95 minutos**
 
 ---
 
-## Etapa 1 — Habilitar o Modelo no Amazon Bedrock
+## Etapa 1 — Verificar Acesso ao Modelo no Amazon Bedrock
 
-> **Por quê:** O Amazon Bedrock requer que cada modelo seja habilitado explicitamente na conta antes do uso. Sem isso, a Lambda retorna erro de acesso ao chamar o Bedrock.
+> **Informação importante:** Desde 2025, todos os modelos da **Amazon** (incluindo o Nova Lite) ficam disponíveis automaticamente na sua conta, sem necessidade de ativação manual. Basta ter as permissões corretas no IAM. Modelos de terceiros (Anthropic, Cohere, etc.) ainda exigem ativação.
 
-### 1.1 — Acessar o Bedrock
+### 1.1 — Confirmar que o modelo está disponível
 
 1. Faça login no [Console AWS](https://console.aws.amazon.com)
 2. Certifique-se de estar na região **Leste dos EUA (Norte da Virgínia) — us-east-1** (canto superior direito)
-3. Na barra de busca superior, digite `Bedrock`
-4. Clique em **Amazon Bedrock** nos resultados
+3. Na barra de busca superior, digite `Bedrock` e clique em **Amazon Bedrock**
+4. No menu lateral esquerdo, clique em **Catálogo de modelos** (em inglês: **Model catalog**)
+5. Na caixa de busca, digite `Nova Lite`
+6. O modelo **Amazon Nova Lite** deve aparecer na lista
 
-### 1.2 — Acessar o gerenciamento de modelos
+Se o modelo aparecer no catálogo, **você já tem acesso** — pode ir direto para a Etapa 2.
 
-1. No menu lateral esquerdo, role até a seção **Configurações do Bedrock**
-2. Clique em **Acesso ao modelo**
+### 1.2 — Caso precise ativar (contas GovCloud ou cenários específicos)
 
-### 1.3 — Solicitar acesso ao modelo
+Se por algum motivo o modelo não estiver acessível, o caminho para ativar manualmente é:
 
-1. Clique no botão **Modificar acesso ao modelo** (canto superior direito)
-2. Na lista de modelos, localize a seção **Amazon**
-3. Marque a caixa ao lado de **Nova Lite**
-4. Clique em **Próximo**
-5. Revise a seleção e clique em **Enviar**
+1. No menu lateral esquerdo, role até o final
+2. Clique em **Acesso ao modelo** (em inglês: **Model access**), que fica dentro da seção **Configurações do Bedrock** / **Bedrock configurations**
+3. Clique em **Modificar acesso ao modelo**
+4. Localize **Amazon Nova Lite** na lista e marque a caixa
+5. Clique em **Próximo** e depois em **Enviar**
 
-> O acesso pode ser imediato ou levar alguns minutos para ser aprovado.
+> **Não encontrou "Acesso ao modelo"?** Essa opção pode estar oculta para contas comerciais comuns, pois os modelos da Amazon são liberados automaticamente. Nesse caso, não é necessário fazer nada — prossiga para a Etapa 2.
 
-### 1.4 — Verificar
+### 1.3 — Verificar
 
-Aguarde até a coluna **Status de acesso** ao lado de **Amazon Nova Lite** mostrar **Acesso concedido** ✅.
+Para confirmar que consegue usar o modelo, acesse **Playgrounds → Chat** no menu lateral e selecione o modelo **Amazon Nova Lite v1**. Se o playground abrir sem erro de permissão, está tudo certo ✅.
 
 ---
 
@@ -69,7 +73,7 @@ Aguarde até a coluna **Status de acesso** ao lado de **Amazon Nova Lite** mostr
 1. Clique em **Criar função** (botão laranja, canto superior direito)
 2. Selecione **Criar do zero**
 3. Preencha os campos:
-   - **Nome da função**: `chat-ia-voz` (ou outro nome de sua preferência)
+   - **Nome da função**: `chat-ia-voz`
    - **Tempo de execução**: `Python 3.12`
    - **Arquitetura**: `x86_64`
 4. Em **Permissões**, expanda **Alterar a função de execução padrão**
@@ -103,12 +107,13 @@ Formato: `arn:aws:lambda:us-east-1:123456789012:function:chat-ia-voz`
 
 ### 3.3 — Configurar integração
 
-1. Em **Integrações**, clique em **Adicionar integração**
-2. Em **Tipo de integração**, selecione **Lambda**
-3. Em **Região da AWS**, selecione `us-east-1`
-4. Em **Função do Lambda**, selecione a função criada (`chat-ia-voz`)
-5. Em **Versão**, selecione `2.0`
-6. Clique em **Próximo**
+1. No campo **Nome da API**, digite `chat-ia-voz`
+2. Em **Integrações**, clique em **Adicionar integração**
+3. Em **Tipo de integração**, selecione **Lambda**
+4. Em **Região da AWS**, selecione `us-east-1`
+5. Em **Função do Lambda**, selecione a função criada (`chat-ia-voz`)
+6. Em **Versão**, selecione `2.0`
+7. Clique em **Próximo**
 
 ### 3.4 — Configurar rotas
 
@@ -128,39 +133,40 @@ Formato: `arn:aws:lambda:us-east-1:123456789012:function:chat-ia-voz`
 1. Revise as configurações
 2. Clique em **Criar**
 
-✅ **Verificação:** A API é criada e a página mostra o **URL de invocação** — anote essa URL, você precisará dela no passo 9.
+✅ **Verificação:** A API é criada com a mensagem de sucesso no topo da tela.
+
+### 3.7 — Configurar CORS
+
+**Menu lateral esquerdo → Desenvolver → CORS**
+
+1. Clique em **Configurar** (botão no canto superior direito da seção)
+2. No campo **Access-Control-Allow-Origin**: clique na caixa, digite `*` e pressione Enter
+   > Para testes use `*`. Na Etapa 12 você substituirá pelo domínio final `https://chat.dev.inhesta.net`
+3. Confirme que **Access-Control-Allow-Headers** tem `content-type` — se não tiver, adicione
+4. Confirme que **Access-Control-Allow-Methods** tem `POST` e `OPTIONS` — se não tiver, adicione
+5. Clique em **Salvar**
+
+✅ **Verificação:** Os campos mostram `*` em Origin, `content-type` em Headers, e `POST` + `OPTIONS` em Methods.
+
+### 3.8 — Implantar a API
+
+1. No menu lateral esquerdo, clique em **Implantar → Estágios**
+2. Clique no estágio **$default**
+3. No canto superior direito, clique em **Implantar**
+
+✅ **Verificação:** A página do estágio mostra o **URL de invocação** — anote essa URL, você precisará dela na Etapa 12.
 
 Formato: `https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com`
 
 A rota completa do chat será: `https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/chat`
 
-### 3.7 — Verificar o tamanho máximo do payload
-
-> **Por quê:** Áudio WebM de 60 segundos convertido para base64 pode chegar a 3–5 MB. O API Gateway precisa aceitar esse tamanho.
-
-Para **API HTTP**, o limite padrão de payload já é **10 MB** — suficiente para este projeto. Não é necessário alterar nada.
-
-✅ **Verificação:** Na seção **Desenvolver → Configurações**, o campo **Versão do formato de payload** mostra `2.0`.
-
-### 3.8 — Configurar CORS
-
-1. No menu lateral esquerdo, clique em **Desenvolver → CORS**
-2. Clique em **Configurar**
-3. Preencha os campos:
-   - **Access-Control-Allow-Origin**: `*` (para testes; substitua pelo domínio em produção)
-   - **Access-Control-Allow-Headers**: `Content-Type`
-   - **Access-Control-Allow-Methods**: `POST, OPTIONS`
-4. Clique em **Salvar**
-
-> O CORS também é controlado na Lambda pela variável `ALLOWED_ORIGIN`. Ambas as configurações (API Gateway e Lambda) precisam estar corretas.
-
-✅ **Verificação:** A seção CORS exibe as origens e os métodos configurados.
-
 ---
 
-## Etapa 4 — Criar o Bucket S3 para Áudios Temporários
+## Etapa 4 — Criar o Bucket S3 e Fazer Upload do Frontend
 
-> **Por quê:** O Amazon Transcribe não aceita áudio enviado diretamente na chamada de API — ele precisa ler de um URI do S3. Este bucket serve como área de trânsito temporário.
+> **Por quê:** O projeto usa **um único bucket S3** para duas finalidades:
+> - **Raiz do bucket**: hospeda os arquivos do site (`index.html`, `script.js`, `style.css`, `imagens/`) servidos pelo CloudFront
+> - **Pasta `transcribe-temp/`**: área temporária onde a Lambda salva os áudios antes de enviá-los ao Transcribe — criada automaticamente pela Lambda, sem necessidade de criação manual
 
 ### 4.1 — Acessar o S3
 
@@ -173,8 +179,8 @@ Para **API HTTP**, o limite padrão de payload já é **10 MB** — suficiente p
 
 ### 4.3 — Configurações básicas
 
-- **Nome do bucket**: escolha um nome único globalmente — ex: `chat-ia-audio-temp-2024`
-  > O nome deve ser único em toda a AWS. Use letras minúsculas, números e hífens. Sem espaços ou caracteres especiais.
+- **Nome do bucket**: escolha um nome único globalmente — ex: `meu-chat-audio-temp-2024`
+  > O nome deve ser único em toda a AWS. Use letras minúsculas, números e hífens. Sem espaços ou caracteres especiais. Anote o nome — você vai usá-lo em várias etapas a seguir.
 - **Região da AWS**: selecione `us-east-1 (Leste dos EUA - Norte da Virgínia)`
   > Deve ser a **mesma região** da Lambda e dos demais serviços.
 
@@ -186,6 +192,8 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 - ✅ Bloquear o acesso público a buckets e objetos concedido por meio de novas listas de controle de acesso (ACLs)
 - ✅ Bloquear o acesso público a buckets e objetos concedido por meio de qualquer lista de controle de acesso (ACL)
 - ✅ Bloquear o acesso entre contas e o acesso público a buckets e objetos por meio de qualquer política de bucket público ou ponto de acesso
+
+> O acesso público fica bloqueado porque o site será servido pelo CloudFront, que acessa o bucket via política OAC — não via URL pública.
 
 ### 4.5 — Demais configurações
 
@@ -200,22 +208,34 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 
 ✅ **Verificação:** O bucket aparece na lista com o nome que você definiu.
 
-### 4.7 — Configurar expiração automática (regra de ciclo de vida)
-
-> **Por quê:** Caso a Lambda falhe antes de deletar o arquivo, a regra de ciclo de vida garante que o áudio seja removido automaticamente após 1 dia.
+### 4.7 — Fazer upload dos arquivos do site
 
 1. Clique no nome do bucket para abri-lo
-2. Clique na aba **Gerenciamento**
-3. Clique em **Criar regra de ciclo de vida**
-4. Preencha:
+2. Clique em **Carregar**
+3. Clique em **Adicionar arquivos** e selecione os seguintes arquivos do repositório:
+   - `index.html`
+   - `script.js`
+   - `style.css`
+4. Clique em **Adicionar pasta** e selecione a pasta `imagens/`
+5. Clique em **Carregar**
+
+✅ **Verificação:** O bucket mostra `index.html`, `script.js`, `style.css` e a pasta `imagens/` na raiz.
+
+### 4.8 — Configurar expiração automática dos áudios (regra de ciclo de vida)
+
+> **Por quê:** A Lambda deleta o áudio do S3 logo após a transcrição. Esta regra é um fallback — caso a Lambda falhe antes de deletar, o áudio é removido automaticamente após 1 dia.
+
+1. Clique na aba **Gerenciamento**
+2. Clique em **Criar regra de ciclo de vida**
+3. Preencha:
    - **Nome da regra de ciclo de vida**: `delete-temp-audio`
    - **Escopo da regra**: selecione `Limitar o escopo desta regra usando um ou mais filtros`
    - Em **Prefixo**: digite `transcribe-temp/`
    - Em **Ações da regra de ciclo de vida**: marque `Expirar versões atuais dos objetos`
    - Em **Dias após a criação do objeto**: digite `1`
-5. Clique em **Criar regra**
+4. Clique em **Criar regra**
 
-✅ **Verificação:** A aba Gerenciamento mostra a regra `delete-temp-audio` com status **Habilitada**.
+✅ **Verificação:** A aba Gerenciamento mostra a regra `delete-temp-audio` com status **Habilitada** e prefixo `transcribe-temp/`.
 
 ---
 
@@ -240,7 +260,7 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 
 1. No editor de política, clique na aba **JSON**
 2. Selecione todo o conteúdo existente (Ctrl+A) e apague
-3. Cole o JSON abaixo, substituindo `NOME-DO-SEU-BUCKET` pelo nome exato do bucket criado na Etapa 4:
+3. Cole o JSON abaixo, substituindo **`NOME-DO-SEU-BUCKET`** pelo nome exato do bucket criado na Etapa 4:
 
 ```json
 {
@@ -281,7 +301,7 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
         "s3:GetObject",
         "s3:DeleteObject"
       ],
-      "Resource": "arn:aws:s3:::NOME-DO-SEU-BUCKET/*"
+      "Resource": "arn:aws:s3:::NOME-DO-SEU-BUCKET/transcribe-temp/*"
     },
     {
       "Sid": "CloudWatchLogs",
@@ -297,8 +317,9 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 }
 ```
 
-> ⚠️ **Atenção:** Substitua `NOME-DO-SEU-BUCKET` pelo nome exato do bucket.
-> Exemplo: `"Resource": "arn:aws:s3:::chat-ia-audio-temp-2024/*"`
+> ⚠️ **Atenção:** Substitua `NOME-DO-SEU-BUCKET` pelo nome exato do bucket e mantenha `/transcribe-temp/*` no final — isso restringe a Lambda apenas à pasta de áudios temporários, sem acesso aos arquivos do site.
+>
+> Exemplo: `"Resource": "arn:aws:s3:::meu-chat-audio-temp-2024/transcribe-temp/*"`
 
 ### 5.4 — Salvar
 
@@ -311,8 +332,6 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 ---
 
 ## Etapa 6 — Configurar Variáveis de Ambiente na Lambda
-
-> **Por quê:** A Lambda usa variáveis de ambiente para saber o nome do bucket, o modelo Bedrock, a voz do Polly e o domínio permitido no CORS. Sem `TRANSCRIBE_BUCKET`, o fluxo de voz falha imediatamente.
 
 ### 6.1 — Acessar as variáveis
 
@@ -328,12 +347,12 @@ Clique em **Adicionar variável de ambiente** para cada item abaixo:
 | Chave | Valor |
 |---|---|
 | `BEDROCK_MODEL_ID` | `amazon.nova-lite-v1:0` |
-| `ALLOWED_ORIGIN` | URL onde o `index.html` está hospedado (ex: `https://meusite.com`) |
-| `TRANSCRIBE_BUCKET` | Nome exato do bucket criado na Etapa 4 (ex: `chat-ia-audio-temp-2024`) |
+| `ALLOWED_ORIGIN` | `https://chat.dev.inhesta.net` |
+| `TRANSCRIBE_BUCKET` | Nome exato do bucket criado na Etapa 4 (ex: `meu-chat-audio-temp-2024`) |
 | `POLLY_VOICE_ID` | `Camila` |
 | `POLLY_ENGINE` | `neural` |
 
-> 💡 **Para testes locais:** se estiver abrindo o `index.html` diretamente no navegador (`file://`) ou via `localhost`, coloque `*` em `ALLOWED_ORIGIN` temporariamente. Em produção, use sempre o domínio HTTPS completo.
+> ⚠️ **`TRANSCRIBE_BUCKET`** é o **nome do bucket** — não uma pasta. A pasta `transcribe-temp/` é criada automaticamente pela Lambda quando ela faz o primeiro upload de áudio. Você não precisa criá-la manualmente.
 
 ### 6.3 — Salvar
 
@@ -373,180 +392,304 @@ Clique em **Adicionar variável de ambiente** para cada item abaixo:
 
 ## Etapa 8 — Fazer Upload do Código da Lambda
 
-> **Por quê:** O código do repositório (`funcao lambda/funcao.py`) precisa ser enviado para a AWS para que a função execute.
+### 8.1 — Acessar o editor de código
 
-### 8.1 — Verificar o manipulador configurado
+1. Na página da função `chat-ia-voz`, clique na aba **Código**
+2. No painel de arquivos à esquerda do editor, clique no arquivo `lambda_function.py`
+3. O código padrão da AWS abre no editor
 
-Antes do upload, confirme qual manipulador está configurado na Lambda:
+### 8.2 — Substituir o código
 
-1. Em **Configuração → Configuração geral**
-2. Veja o campo **Manipulador** — ex: `lambda_function.lambda_handler`
-   - A parte antes do ponto (`lambda_function`) é o nome do arquivo `.py` esperado
-   - A parte depois do ponto (`lambda_handler`) é a função dentro do arquivo
+1. Abra o arquivo `funcao lambda/funcao.py` do repositório no seu computador
+2. Selecione todo o conteúdo (Ctrl+A) e copie (Ctrl+C)
+3. Volte para o editor da Lambda no navegador
+4. Clique dentro do editor de código e selecione tudo (Ctrl+A)
+5. Cole o código copiado (Ctrl+V)
 
-> Se o manipulador estiver como `lambda_function.lambda_handler`, o arquivo precisa se chamar `lambda_function.py`.
+### 8.3 — Implantar o código
 
-### 8.2 — Opção A: Copiar e colar no editor (mais simples)
+1. Clique no botão **Implantar** — fica logo acima do editor
+2. Aguarde a mensagem verde: **"A função chat-ia-voz foi atualizada com êxito"**
 
-1. Na aba **Código** da Lambda, no painel de arquivos à esquerda, clique no arquivo `.py` existente (geralmente `lambda_function.py`)
-2. O conteúdo abre no editor
-3. Selecione tudo (Ctrl+A) e apague
-4. Abra o arquivo `funcao lambda/funcao.py` do repositório no seu computador
-5. Copie todo o conteúdo e cole no editor da Lambda
-6. Clique em **Implantar** (botão laranja acima do editor)
-
-### 8.3 — Opção B: Upload via arquivo ZIP
-
-1. No seu computador, faça uma cópia do arquivo `funcao lambda/funcao.py`
-2. Renomeie a cópia para o nome esperado pelo manipulador (ex: `lambda_function.py`)
-3. Crie um arquivo ZIP contendo apenas esse arquivo
-4. Na aba **Código** da Lambda, clique em **Fazer upload de** → **Arquivo .zip**
-5. Clique em **Fazer upload**, selecione o ZIP criado e clique em **Salvar**
-
-> ⚠️ O nome do arquivo dentro do ZIP deve corresponder ao manipulador. Se o manipulador é `lambda_function.lambda_handler`, o arquivo deve se chamar `lambda_function.py`.
-
-✅ **Verificação:** No editor de código, o conteúdo do arquivo mostra o código do repositório com os comentários do projeto. O campo **Última modificação** mostra a hora atual.
+✅ **Verificação:** O campo **Última modificação** em **Propriedades do código** mostra a hora atual.
 
 ---
 
-## Etapa 9 — Configurar o Frontend
+## Etapa 9 — Criar o Certificado SSL/TLS no ACM
 
-> **Por quê:** O `script.js` precisa da URL do API Gateway para enviar as requisições.
+> **Por quê:** O CloudFront exige um certificado HTTPS para associar um domínio personalizado. O AWS Certificate Manager (ACM) emite certificados gratuitos. O certificado **obrigatoriamente precisa ser criado na região us-east-1** — essa é uma exigência do CloudFront.
 
-### 9.1 — Abrir o script.js
+### 9.1 — Acessar o Certificate Manager
 
-Abra o arquivo `script.js` do repositório em um editor de texto.
+1. Confirme que a região selecionada é **us-east-1**
+2. Na barra de busca, digite `Certificate Manager` e clique em **Certificate Manager**
 
-### 9.2 — Atualizar a URL da API
+### 9.2 — Solicitar certificado
 
-Localize a linha no topo do arquivo:
+1. Clique em **Solicitar um certificado**
+2. Selecione **Solicitar um certificado público**
+3. Clique em **Próximo**
+
+### 9.3 — Configurar o domínio
+
+1. Em **Nomes de domínio totalmente qualificados**, digite: `chat.dev.inhesta.net`
+2. Em **Método de validação**, selecione **Validação de DNS**
+3. Em **Algoritmo de chave**, mantenha `RSA 2048`
+4. Clique em **Solicitar**
+
+### 9.4 — Validar o certificado via DNS
+
+1. O certificado é criado com status **Pendente de validação**
+2. Clique no ID do certificado para abri-lo
+3. Clique em **Criar registros no Route 53**
+   > O ACM cria automaticamente o registro CNAME de validação no Route 53.
+4. Confirme clicando em **Criar registros**
+
+### 9.5 — Aguardar emissão
+
+A validação leva de **5 a 30 minutos**. Quando o status mudar para **Emitido**, o certificado está pronto ✅.
+
+> Anote o **ARN do certificado** — você precisará dele na Etapa 10.
+
+---
+
+## Etapa 10 — Criar a Distribuição CloudFront
+
+> **Por quê:** O CloudFront serve os arquivos do S3 via HTTPS com o domínio personalizado `chat.dev.inhesta.net`. O HTTPS é obrigatório para o navegador permitir acesso ao microfone.
+
+### 10.1 — Acessar o CloudFront
+
+1. Na barra de busca do Console AWS, digite `CloudFront` e clique em **CloudFront**
+2. Clique em **Criar distribuição**
+
+### 10.2 — Configurar a origem (bucket S3)
+
+1. Em **Domínio de origem**, clique na caixa e selecione o bucket criado na Etapa 4
+   > Selecione o endpoint padrão do S3 (formato `meu-chat-audio-temp-2024.s3.amazonaws.com`) — **não** o endpoint de website estático
+2. Em **Acesso à origem**, selecione **Controle de acesso de origem (recomendado)**
+3. Clique em **Criar novo OAC**
+   - Em **Nome**, deixe o nome gerado automaticamente
+   - Em **Tipo de assinatura**, mantenha **Assinar solicitações (recomendado)**
+   - Clique em **Criar**
+
+### 10.3 — Configurar o comportamento padrão
+
+1. Em **Política de protocolo do visualizador**, selecione **Redirecionar HTTP para HTTPS**
+2. Em **Métodos HTTP permitidos**, mantenha `GET, HEAD`
+3. Em **Política de cache**, mantenha `CachingOptimized`
+
+### 10.4 — Configurar o documento padrão
+
+1. Role até a seção **Configurações**
+2. Em **Objeto raiz padrão**, digite `index.html`
+
+### 10.5 — Configurar o domínio personalizado e certificado
+
+1. Em **Nomes de domínio alternativos (CNAMEs)**, clique em **Adicionar item** e digite: `chat.dev.inhesta.net`
+2. Em **Certificado SSL personalizado**, selecione o certificado `chat.dev.inhesta.net` criado na Etapa 9
+   > Se o certificado não aparecer, verifique se ele foi criado na região **us-east-1** e se o status é **Emitido**.
+
+### 10.6 — Criar a distribuição
+
+1. Role até o final da página
+2. Clique em **Criar distribuição**
+
+### 10.7 — Atualizar a política do bucket S3
+
+Logo após criar a distribuição, o CloudFront exibe um aviso:
+> *"A política do bucket S3 precisa ser atualizada para permitir acesso do CloudFront"*
+
+1. Clique no botão **Copiar política** que aparece no aviso
+2. Abra o bucket no S3 em uma nova aba
+3. Clique na aba **Permissões → Política do bucket → Editar**
+4. Cole a política copiada
+5. Clique em **Salvar alterações**
+
+### 10.8 — Anotar o domínio do CloudFront
+
+Na página da distribuição, anote o **Nome de domínio** — formato: `d1234abcdef.cloudfront.net`
+
+✅ **Verificação:** A distribuição aparece na lista com status **Habilitado**. A implantação pode levar até 15 minutos — o status muda de **Em andamento** para **Implantado**.
+
+---
+
+## Etapa 11 — Criar o Registro DNS no Route 53
+
+### 11.1 — Acessar o Route 53
+
+1. Na barra de busca do Console AWS, digite `Route 53` e clique em **Route 53**
+2. No menu lateral esquerdo, clique em **Zonas hospedadas**
+3. Clique na zona `inhesta.net`
+
+### 11.2 — Criar o registro
+
+1. Clique em **Criar registro**
+2. Preencha os campos:
+   - **Nome do registro**: `chat.dev`
+   - **Tipo de registro**: `A`
+   - **Alias**: ative o toggle **Alias**
+   - **Rota de tráfego para**: selecione **Alias para distribuição do CloudFront**
+   - **Distribuição do CloudFront**: selecione a distribuição criada na Etapa 10
+   - **Política de roteamento**: `Simples`
+3. Clique em **Criar registros**
+
+✅ **Verificação:** O registro `chat.dev.inhesta.net` aparece na lista com tipo `A` apontando para o CloudFront. A propagação leva de 1 a 5 minutos.
+
+---
+
+## Etapa 12 — Configurar o Frontend e Finalizar
+
+### 12.1 — Atualizar a URL da API no script.js
+
+Abra o arquivo `script.js` no seu computador e localize a linha no topo:
 
 ```javascript
-const API_URL = "https://cax0vprdtj.execute-api.us-east-1.amazonaws.com/chat";
+const API_URL = "https://jhmbcrf0o7.execute-api.us-east-1.amazonaws.com/chat";
 ```
 
-Substitua pela URL do seu API Gateway criado na Etapa 3 + `/chat`:
+Substitua pela URL do seu API Gateway (anotada na Etapa 3.8) + `/chat`:
 
 ```javascript
 const API_URL = "https://SEU-ID.execute-api.us-east-1.amazonaws.com/chat";
 ```
 
-> A URL completa do endpoint é: **URL de invocação** (anotado na Etapa 3) + `/chat`
-> Exemplo: `https://ab12cd34ef.execute-api.us-east-1.amazonaws.com/chat`
+Salve o arquivo.
 
-### 9.3 — Salvar o arquivo
+### 12.2 — Atualizar o CORS no API Gateway
 
-Salve o `script.js`.
+1. Acesse **API Gateway → chat-ia-voz → Desenvolver → CORS**
+2. Clique em **Configurar**
+3. Em **Access-Control-Allow-Origin**, remova `*` e adicione: `https://chat.dev.inhesta.net`
+4. Clique em **Salvar**
+5. Vá em **Implantar → Estágios → $default → Implantar** para aplicar a mudança
 
-### 9.4 — Hospedar o frontend
+### 12.3 — Fazer upload do script.js atualizado no S3
 
-O chat exige HTTPS para acessar o microfone (exigência da API MediaRecorder). Opções para hospedar:
+1. Acesse o bucket no S3
+2. Selecione o arquivo `script.js` existente
+3. Clique em **Carregar**, selecione o `script.js` atualizado do seu computador e clique em **Carregar**
+   > Isso substitui o arquivo antigo pelo novo com a URL correta da API.
 
-| Opção | Como usar |
-|---|---|
-| **Amazon S3 + CloudFront** | Recomendado para produção. Veja a seção abaixo. |
-| **Live Server (extensão do VS Code)** | Para testes rápidos locais — instale a extensão e clique em "Go Live" |
-| **GitHub Pages** | Gratuito para repositórios públicos |
-| **Netlify / Vercel** | Arraste a pasta do projeto para o site |
+### 12.4 — Invalidar o cache do CloudFront
 
-> Se usar localhost ou `file://`, defina `ALLOWED_ORIGIN=*` na Lambda (apenas para testes).
+> **Por quê:** O CloudFront faz cache dos arquivos. Após substituir o `script.js`, é necessário invalidar o cache para que os usuários recebam a versão nova.
 
-#### Hospedar no S3 + CloudFront (recomendado para produção)
+1. Acesse o **CloudFront → sua distribuição → aba Invalidações**
+2. Clique em **Criar invalidação**
+3. Em **Caminhos de objeto**, digite: `/*`
+4. Clique em **Criar invalidação**
 
-1. Crie um bucket S3 com **Hospedagem de site estático** habilitada
-2. Faça upload de `index.html`, `script.js`, `style.css` e da pasta `imagens/`
-3. Crie uma distribuição do CloudFront apontando para o bucket
-4. Use o domínio do CloudFront em `ALLOWED_ORIGIN` na Lambda
+Aguarde o status mudar para **Concluído** (leva 1 a 2 minutos).
 
----
-
-## Etapa 10 — Testes de Validação
-
-> ⚠️ **Requisito:** O chat precisa estar acessível via HTTPS para funcionar com o microfone.
-
-### Teste 10.1 — Verificar conectividade com a API
-
-1. Abra o chat no navegador
-2. Verifique se o indicador de status no cabeçalho mostra **"API configurada"** (texto azul)
-
-> Se mostrar outra coisa, verifique se a URL em `API_URL` no `script.js` está correta e salva.
+✅ **Verificação final:** Acesse `https://chat.dev.inhesta.net` no navegador. O chat deve abrir com HTTPS (cadeado na barra de endereços).
 
 ---
 
-### Teste 10.2 — Texto simples (síntese de voz desativada)
+## Etapa 13 — Testes de Validação
+
+### Teste 13.1 — Verificar conectividade com a API
+
+1. Acesse `https://chat.dev.inhesta.net` no navegador
+2. Verifique o cadeado HTTPS na barra de endereços ✅
+3. Verifique se o indicador de status no cabeçalho mostra **"API configurada"** (texto azul)
+
+---
+
+### Teste 13.2 — Texto simples (síntese de voz desativada)
 
 1. Certifique-se de que o botão 🔊 está **desativado** (cinza)
 2. No campo de texto, digite: `Qual é a capital do Brasil?`
 3. Clique em **Enviar** (ou pressione Enter)
 
-✅ **Resultado esperado:** Resposta em texto aparece em menos de 10 segundos. Nenhum player de áudio é exibido.
+✅ **Resultado esperado:** Resposta em texto aparece em menos de 10 segundos. Nenhum reprodutor de áudio é exibido.
 
 ---
 
-### Teste 10.3 — Texto com síntese de voz ativada
+### Teste 13.3 — Texto com síntese de voz ativada
 
-1. Clique no botão 🔊 no cabeçalho (deve ficar colorido e com `aria-pressed="true"`)
+1. Clique no botão 🔊 no cabeçalho (deve ficar colorido)
 2. Digite uma mensagem e clique em **Enviar**
 
-✅ **Resultado esperado:** A bolha de resposta da IA exibe o texto **e** um player de áudio. O áudio toca automaticamente com a voz Camila em português.
+✅ **Resultado esperado:** A bolha de resposta exibe o texto **e** um reprodutor de áudio. O áudio toca automaticamente com a voz Camila.
 
 ---
 
-### Teste 10.4 — Gravação de voz
+### Teste 13.4 — Gravação de voz
 
-1. Certifique-se de estar em uma página HTTPS
-2. Clique no botão 🎤 (microfone) no campo de envio
-3. O navegador exibe um popup solicitando acesso ao microfone — clique em **Permitir**
-4. Confirme que a barra de gravação aparece com:
-   - Ponto vermelho pulsante (●)
-   - Contador de tempo (ex: `0:03`)
-   - Texto "Gravando…"
-5. Fale claramente: `"Qual é a capital do Brasil?"`
-6. Clique no botão ⏹ para parar a gravação
+1. Clique no botão 🎤 (microfone) no campo de envio
+2. Clique em **Permitir** no popup do microfone
+3. Fale claramente: `"Qual é a capital do Brasil?"`
+4. Clique no botão ⏹ para parar a gravação
 
 ✅ **Resultado esperado:**
-- Bolha do usuário com player de áudio da gravação
-- Transcrição em itálico abaixo do player (ex: *"qual é a capital do brasil"*)
+- Bolha do usuário com reprodutor de áudio da gravação
+- Transcrição em itálico abaixo do reprodutor
 - Bolha da IA com a resposta correta
 
 Tempo total esperado: menos de 40 segundos.
 
 ---
 
-### Teste 10.5 — Voz com síntese de voz (fluxo bidirecional completo)
+### Teste 13.5 — Voz com síntese de voz (fluxo bidirecional completo)
 
 1. Ative a síntese de voz (botão 🔊 colorido)
 2. Clique no microfone 🎤, fale uma pergunta e clique em ⏹
 
 ✅ **Resultado esperado:**
-- Bolha do usuário: player de áudio + transcrição em itálico
-- Bolha da IA: texto da resposta + player de áudio
-- O áudio da IA toca automaticamente
+- Bolha do usuário: reprodutor de áudio + transcrição em itálico
+- Bolha da IA: texto + reprodutor de áudio tocando automaticamente
 
 ---
 
-### Teste 10.6 — Parada automática em 60 segundos
+### Teste 13.6 — Verificar logs no CloudWatch
 
-1. Clique no microfone e aguarde sem parar manualmente
-2. Observe o contador chegar em `1:00`
+1. Acesse **CloudWatch → Grupos de logs**
+2. Busque `/aws/lambda/chat-ia-voz` e clique no stream mais recente
 
-✅ **Resultado esperado:** A gravação para automaticamente e o áudio é processado normalmente.
+✅ **O que verificar:**
+- ❌ Sem erros `AccessDenied`
+- ❌ Sem erros `NoSuchBucket`
+- ❌ Sem erros `TRANSCRIBE_BUCKET não configurado`
+- ✅ Linhas com `TranscriptionJobName: chat-xxxxxxxxxxxxxxxx`
+- ✅ Sem exceções não tratadas (`Traceback`)
 
 ---
 
-### Teste 10.7 — Verificar logs no CloudWatch
+## O que corrigir na sua configuração atual
 
-1. Acesse o Console AWS → **CloudWatch**
-2. No menu lateral esquerdo, clique em **Grupos de logs**
-3. Na caixa de busca, pesquise `/aws/lambda/chat-ia-voz`
-4. Clique no grupo de logs encontrado
-5. Clique no stream de log mais recente
+Com base no que foi configurado até agora, você precisa ajustar os itens abaixo:
 
-✅ **O que verificar nos logs:**
-- ❌ Sem erros `AccessDenied` (indica política IAM incorreta)
-- ❌ Sem erros `TRANSCRIBE_BUCKET não configurado` (indica variável de ambiente ausente)
-- ✅ Linhas com `TranscriptionJobName: chat-xxxxxxxxxxxxxxxx` (job iniciado com sucesso)
-- ✅ Sem exceções não tratadas (`Traceback` inesperado)
+### 1 — Política IAM (Etapa 5)
+
+A política atual aponta para `NOME-DO-SEU-BUCKET/*`. Precisa ser atualizada para o nome real do bucket com o prefixo correto:
+
+1. Lambda → **Configuração → Permissões** → clique na função de execução
+2. Na seção **Políticas em linha**, clique em `chat-ia-policy` → **Editar**
+3. Na aba **JSON**, localize a linha:
+   ```
+   "Resource": "arn:aws:s3:::NOME-DO-SEU-BUCKET/*"
+   ```
+4. Substitua por:
+   ```
+   "Resource": "arn:aws:s3:::meu-chat-audio-temp-2024/transcribe-temp/*"
+   ```
+5. Clique em **Salvar alterações**
+
+### 2 — Variável TRANSCRIBE_BUCKET (Etapa 6)
+
+Confirme que o valor está exatamente como aparece no S3:
+
+- Lambda → **Configuração → Variáveis de ambiente**
+- `TRANSCRIBE_BUCKET` = `meu-chat-audio-temp-2024`
+
+### 3 — Regra de ciclo de vida no bucket (Etapa 4.8)
+
+Se ainda não foi criada:
+
+1. S3 → bucket `meu-chat-audio-temp-2024` → aba **Gerenciamento**
+2. Criar regra `delete-temp-audio` com prefixo `transcribe-temp/` e expiração em 1 dia
+
+Após essas três correções, o fluxo de voz deve funcionar.
 
 ---
 
@@ -554,15 +697,15 @@ Tempo total esperado: menos de 40 segundos.
 
 | Sintoma | Causa provável | Como resolver |
 |---|---|---|
-| Status "API pendente" no cabeçalho | `API_URL` no `script.js` não foi atualizada | Atualize a constante `API_URL` com a URL do seu API Gateway |
-| Erro de CORS no console do navegador | `ALLOWED_ORIGIN` não corresponde ao domínio do frontend | Corrija a variável `ALLOWED_ORIGIN` na Lambda para corresponder exatamente ao domínio (sem barra no final) |
-| "Microfone negado" ou botão não funciona | Página não está em HTTPS | Hospede o `index.html` via HTTPS ou use `localhost` com servidor local |
-| `TRANSCRIBE_BUCKET não configurado` no log | Variável de ambiente ausente | Refaça a Etapa 6 e verifique se a variável foi salva |
-| `AccessDenied` no CloudWatch | Política IAM incompleta ou nome do bucket incorreto | Refaça a Etapa 5 e verifique o ARN do bucket no campo `Resource` da política |
-| Lambda expira antes de concluir | Tempo limite ainda está em 3 segundos | Refaça a Etapa 7 e aumente o tempo limite para 60 segundos |
-| Erro 413 ao enviar áudio | Limite de payload do API Gateway excedido | Verifique se o tipo da API é HTTP API (limite padrão de 10 MB) |
-| "Não foi possível transcrever o áudio" | Áudio muito curto, silencioso ou com muito ruído | Fale por pelo menos 2–3 segundos, claramente, próximo ao microfone |
-| Resposta sem áudio mesmo com síntese ativada | Polly falhou — provavelmente motor ou voz incorretos | Verifique se `POLLY_VOICE_ID=Camila` e `POLLY_ENGINE=neural` nos logs do CloudWatch |
-| Modelo Bedrock retorna erro de acesso | Modelo não habilitado na conta | Refaça a Etapa 1 e aguarde o status **Acesso concedido** |
-| Erro 403 em todas as respostas | CORS bloqueado pelo API Gateway ou pela Lambda | Verifique a configuração de CORS no API Gateway (Etapa 3.8) e a variável `ALLOWED_ORIGIN` (Etapa 6) |
-| Função Lambda não encontrada | Manipulador configurado incorretamente | Vá em Configuração → Configuração geral e verifique o campo **Manipulador**. Deve ser `lambda_function.lambda_handler` se o arquivo se chama `lambda_function.py` |
+| `NoSuchBucket` no CloudWatch | Nome do bucket errado na variável `TRANSCRIBE_BUCKET` | Confirme o nome exato do bucket no S3 e atualize a variável (Etapa 6) |
+| `AccessDenied` no S3 | ARN do bucket incorreto na política IAM | Atualize o `Resource` da política com o nome real do bucket + `/transcribe-temp/*` (Etapa 5) |
+| Status "API pendente" no cabeçalho | `API_URL` no `script.js` não foi atualizada | Atualize a constante `API_URL` e refaça o upload no S3 (Etapa 12.1 e 12.3) |
+| Erro de CORS no console do navegador | `ALLOWED_ORIGIN` ou CORS do API Gateway incorretos | Atualize ambos com `https://chat.dev.inhesta.net` (Etapa 12.2) |
+| "Microfone negado" | Página não está em HTTPS | Verifique se está acessando via `https://chat.dev.inhesta.net` |
+| Lambda expira antes de concluir | Tempo limite ainda está em 3 segundos | Refaça a Etapa 7 — tempo limite para 60 segundos |
+| "Não foi possível transcrever o áudio" | Áudio muito curto ou silencioso | Fale por pelo menos 2–3 segundos, claramente, próximo ao microfone |
+| Resposta sem áudio com síntese ativada | Polly com motor ou voz incorretos | Verifique `POLLY_VOICE_ID=Camila` e `POLLY_ENGINE=neural` nas variáveis de ambiente |
+| Site mostra arquivos antigos | Cache do CloudFront não foi invalidado | CloudFront → distribuição → Invalidações → Criar → `/*` |
+| Certificado SSL não aparece no CloudFront | Certificado criado na região errada | Recrie o certificado na região **us-east-1** |
+| `chat.dev.inhesta.net` não resolve | DNS não criado ou propagando | Verifique o registro A no Route 53 (Etapa 11) e aguarde até 5 minutos |
+| CloudFront retorna 403 | Política do bucket S3 não foi atualizada | Refaça o passo 10.7 — copie e cole a política OAC no bucket |
