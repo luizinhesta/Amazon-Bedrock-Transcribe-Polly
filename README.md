@@ -1,7 +1,7 @@
 ﻿# Chat IA com Voz — Amazon Bedrock, Transcribe e Polly
 
 Chat de inteligência artificial com voz bidirecional rodando inteiramente na AWS. O usuário pode digitar ou **falar** com a IA, e a IA responde em texto **e em áudio** com voz natural em português.
-
+![Descrição da imagem](<imagens/imagem%20(1).png>)
 ---
 
 ## O que este projeto faz
@@ -12,6 +12,15 @@ Chat de inteligência artificial com voz bidirecional rodando inteiramente na AW
 | Usuário fala pelo microfone — texto é extraído automaticamente | **Amazon Transcribe** | Voz → texto |
 | A IA responde em áudio com voz natural em português | **Amazon Polly** | Texto → voz |
 | Hospedagem dos arquivos do site e armazenamento temporário de áudio | **Amazon S3** | Intermediário |
+
+<p align="center">
+  <img src="imagens/imagem%20(6).png" width="30%" />
+  <img src="imagens/imagem%20(5).png" width="30%" />
+  <img src="imagens/imagem%20(7).png" width="30%" />
+</p>
+<p align="center">
+  <img src="imagens/imagem%20(8).png" width="30%" />
+</p>
 
 ---
 
@@ -27,6 +36,8 @@ Chat de inteligência artificial com voz bidirecional rodando inteiramente na AW
 | **Amazon API Gateway** | Expõe a Lambda como endpoint HTTPS (POST /chat) |
 | **Amazon CloudWatch** | Logs de execução da Lambda |
 | **HTML + CSS + JavaScript** | Frontend do chat — sem estrutura de projeto, sem etapa de compilação |
+
+![Descrição da imagem](<imagens/imagem%20(22).png>)
 
 ---
 
@@ -67,7 +78,7 @@ Amazon Bedrock → resposta em texto
     ↓
 { reply, transcript, audio_base64? } → navegador
 ```
-
+![Descrição da imagem](<imagens/imagem%20(2).png>)
 ---
 
 ## Amazon Transcribe — entrada de voz

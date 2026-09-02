@@ -24,6 +24,17 @@
 
 **Tempo total estimado: ~95 minutos**
 
+![Descrição da imagem](<imagens/imagem%20(22).png>)
+
+<p align="center">
+  <img src="imagens/imagem%20(6).png" width="30%" />
+  <img src="imagens/imagem%20(5).png" width="30%" />
+  <img src="imagens/imagem%20(7).png" width="30%" />
+</p>
+<p align="center">
+  <img src="imagens/imagem%20(8).png" width="30%" />
+</p>
+
 ---
 
 ## Etapa 1 — Verificar Acesso ao Modelo no Amazon Bedrock
@@ -83,6 +94,8 @@ Para confirmar que consegue usar o modelo, acesse **Playgrounds → Chat** no me
 
 ✅ **Verificação:** A página da função abre com a mensagem de que a função foi criada com sucesso.
 
+![Descrição da imagem](<imagens/imagem%20(13).png>)
+
 ### 2.3 — Anotar o ARN da função
 
 Na página da função, no canto superior direito, copie o **ARN da função** — você precisará dele ao criar o API Gateway.
@@ -135,6 +148,8 @@ Formato: `arn:aws:lambda:us-east-1:123456789012:function:chat-ia-voz`
 
 ✅ **Verificação:** A API é criada com a mensagem de sucesso no topo da tela.
 
+![Descrição da imagem](<imagens/imagem%20(12).png>)
+
 ### 3.7 — Configurar CORS
 
 **Menu lateral esquerdo → Desenvolver → CORS**
@@ -162,6 +177,9 @@ A rota completa do chat será: `https://xxxxxxxxxx.execute-api.us-east-1.amazona
 
 ---
 
+![Descrição da imagem](<imagens/imagem%20(3).png>)
+
+
 ## Etapa 4 — Criar o Bucket S3 e Fazer Upload do Frontend
 
 > **Por quê:** O projeto usa **um único bucket S3** para duas finalidades:
@@ -183,6 +201,8 @@ A rota completa do chat será: `https://xxxxxxxxxx.execute-api.us-east-1.amazona
   > O nome deve ser único em toda a AWS. Use letras minúsculas, números e hífens. Sem espaços ou caracteres especiais. Anote o nome — você vai usá-lo em várias etapas a seguir.
 - **Região da AWS**: selecione `us-east-1 (Leste dos EUA - Norte da Virgínia)`
   > Deve ser a **mesma região** da Lambda e dos demais serviços.
+
+![Descrição da imagem](<imagens/imagem%20(18).png>)
 
 ### 4.4 — Bloquear acesso público
 
@@ -236,6 +256,8 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 4. Clique em **Criar regra**
 
 ✅ **Verificação:** A aba Gerenciamento mostra a regra `delete-temp-audio` com status **Habilitada** e prefixo `transcribe-temp/`.
+
+![Descrição da imagem](<imagens/imagem%20(17).png>)
 
 ---
 
@@ -329,6 +351,10 @@ Em **Configurações de bloqueio de acesso público deste bucket**, certifique-s
 
 ✅ **Verificação:** Na aba **Permissões** da função de execução, a política `chat-ia-policy` aparece na seção **Políticas em linha**.
 
+![Descrição da imagem](<imagens/imagem%20(4).png>)
+![Descrição da imagem](<imagens/imagem%20(21).png>)
+
+
 ---
 
 ## Etapa 6 — Configurar Variáveis de Ambiente na Lambda
@@ -359,6 +385,9 @@ Clique em **Adicionar variável de ambiente** para cada item abaixo:
 1. Clique em **Salvar**
 
 ✅ **Verificação:** A seção Variáveis de ambiente lista todas as 5 variáveis configuradas.
+
+![Descrição da imagem](<imagens/imagem%20(15).png>)
+![Descrição da imagem](<imagens/imagem%20(16).png>)
 
 ---
 
@@ -412,6 +441,8 @@ Clique em **Adicionar variável de ambiente** para cada item abaixo:
 2. Aguarde a mensagem verde: **"A função chat-ia-voz foi atualizada com êxito"**
 
 ✅ **Verificação:** O campo **Última modificação** em **Propriedades do código** mostra a hora atual.
+
+![Descrição da imagem](<imagens/imagem%20(14).png>)
 
 ---
 
@@ -511,6 +542,9 @@ Na página da distribuição, anote o **Nome de domínio** — formato: `d1234ab
 
 ✅ **Verificação:** A distribuição aparece na lista com status **Habilitado**. A implantação pode levar até 15 minutos — o status muda de **Em andamento** para **Implantado**.
 
+![Descrição da imagem](<imagens/imagem%20(10).png>)
+![Descrição da imagem](<imagens/imagem%20(11).png>)
+
 ---
 
 ## Etapa 11 — Criar o Registro DNS no Route 53
@@ -534,6 +568,8 @@ Na página da distribuição, anote o **Nome de domínio** — formato: `d1234ab
 3. Clique em **Criar registros**
 
 ✅ **Verificação:** O registro `chat.dev.inhesta.net` aparece na lista com tipo `A` apontando para o CloudFront. A propagação leva de 1 a 5 minutos.
+
+![Descrição da imagem](<imagens/imagem%20(9).png>)
 
 ---
 
@@ -652,6 +688,9 @@ Tempo total esperado: menos de 40 segundos.
 - ❌ Sem erros `TRANSCRIBE_BUCKET não configurado`
 - ✅ Linhas com `TranscriptionJobName: chat-xxxxxxxxxxxxxxxx`
 - ✅ Sem exceções não tratadas (`Traceback`)
+
+![Descrição da imagem](<imagens/imagem%20(19).png>)
+![Descrição da imagem](<imagens/imagem%20(20).png>)
 
 ---
 

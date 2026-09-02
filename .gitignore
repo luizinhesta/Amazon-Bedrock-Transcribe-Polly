@@ -28,3 +28,9 @@ Homestead.json
 .env.production
 .phpactor.json
 auth.json
+
+# Kiro
+.kiro/
+
+# Imagens antigas
+imagens/Antigas/
